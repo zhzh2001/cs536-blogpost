@@ -207,39 +207,39 @@ UPID of the receiver to identify the correct physical destination.
 
 ### Details of Sending and Receiving a UIPI.
 
+Before an interrupt is sent, the application sets up a route for the
+interrupt using system calls. allocates the UPID and
+takes a pointer to the user-level interrupt handler,
+`register_sender(...)` allocates an entry in the UITT. The sender can
+then use `senduipi` to post an interrupt.
+Figure 1
+illustrates the end-to-end process of sending and receiving a posted
+UIPI:
+
 ![**Architecture view of UIPI:** *UIPI is largely implemented in
 microcode. The sender communicates the UIPI vector through shared memory
 (UPID). Steps described in
 § 3.2*](figures/fig_uipi_end_to_end.png)
 
-Before an interrupt is sent, the application sets up a route for the
-interrupt using system calls. allocates the UPID and
-takes a pointer to the user-level interrupt handler,
-`register_sender(...)` allocates an entry in the UITT. The sender can
-then use to post an interrupt.
-Figure 1
-illustrates the end-to-end process of sending and receiving a posted
-UIPI:
-
-() The sending core looks up the receiver's UPID in the UITT, updates
+❶ The sending core looks up the receiver's UPID in the UITT, updates
 the UPID's (PIR) to reflect the vector being sent, and sets it's
-outstanding interrupt (ON) bit, indicating an interrupt is pending. (),
+outstanding interrupt (ON) bit, indicating an interrupt is pending. ❷,
 The sending core reads the APICID and vector of the receiving core from
 the UPID, and writes it to interrupt command register (ICR). This causes
-the local APIC to send an interrupt to the receiving core. () The IOAPIC
+the local APIC to send an interrupt to the receiving core. ❸ The IOAPIC
 sends the interrupt message over the system bus to the local APIC on the
 receiver. The local APIC notifies the core by raising an interrupt
-signal line. () The receiving core issues a full pipeline
+signal line. ❹ The receiving core issues a full pipeline
 flush and starts executing a microcode procedure called *notification
 processing* that reads the user interrupt vector from the UPID of the
 current thread, saves it in a dedicated register (UIRR), and clears the
-outstanding notification bit in the current threads UPID. () The core
+outstanding notification bit in the current threads UPID. ❺ The core
 executes the *user interrupt delivery* microcode procedure. It pushes
 the stack pointer, PC, and user vector onto the stack. It clears the
 user interrupt flag (UIF) disabling interrupt delivery for the handler.
 It updates the UIRR to show the interrupt has been processed. And
-finally, it jumps to the user-level interrupt handler specified in the
-register. () The handler executes. () The handler executes a , popping
+finally, it jumps to the user-level interrupt handler specified in the `UINT_Handler`
+register. ❻ The handler executes. ❼ The handler executes a `uiret`, popping
 the stack pointer and PC from the stack, and sets the user interrupt
 flag (UIF), re-enabling interrupt delivery, and resuming normal control
 flow on the receiver.
@@ -326,10 +326,10 @@ direct use by applications developers. Instead it offers a low level
 primitive through which *user-level runtimes* can implement software
 timers for tasks like preemption, periodic polling, timeouts, etc.
 
-From user level, the timer is used through two new instructions: and .
+From user level, the timer is used through two new instructions: `set_timer(cycles, mode)` and `clear_timer()`. `cycles`
 is a 64-bit unsigned integer, and the mode is a one bit flag, indicating
-if the timer is a periodic or a one-shot timer. If the is periodic,
-cycles is interpreted as a period in cycles. If the is one-shot, cycles
+if the timer is a periodic or a one-shot timer. If the `mode` is periodic,
+cycles is interpreted as a period in cycles. If the `mode` is one-shot, cycles
 is interpreted as a deadline, again, in keeping with the traditional
 APIC design that makes it simple to specify the next deadline when
 implementing multiple software timers.
@@ -343,8 +343,8 @@ timers, the timer uses the system clock to offer high resolution.
 KB_timer interrupts are delivered by invoking the user-level interrupt
 handler, and passing it the vector that was assigned by the kernel.
 KB_timer interrupt delivery is very inexpensive (cycles), as it can skip
-the microcode steps related to UPID's and routing ()
-(§ 3.2) and invoke the microcode directly.
+the microcode steps related to UPID's and routing (notification process)
+(§ 3.2) and invoke the interrupt delivery microcode directly.
 
 Unlike IPIs, there is no special slow path support, i.e., it is not
 intended to fire when either the kernel, or any thread other than the
@@ -377,8 +377,8 @@ interrupt delivery (where the receiving thread is running) is faster and
 free of contention for shared memory.
 
 Interrupt forwarding extends the local APIC with two new 256-bit
-registers, where each bit corresponds to a vector. , indicates which
-interrupts to forward on the current core. , indicates which interrupts
+registers, where each bit corresponds to a vector. `forwarding_enabled`, indicates which
+interrupts to forward on the current core. `forwarded_active`, indicates which interrupts
 should be forwarded to the currently running thread.
 
 Our interrupt forwarding scheme, while efficient and minimally
