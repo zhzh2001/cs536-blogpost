@@ -1,4 +1,6 @@
-# Background and Problem Overview
+# xUI: Extended User Interrupts in Networks
+
+## Background and Problem Overview
 
 Background: The emergency of user-space runtime systems and
 kernel-bypass:
@@ -82,9 +84,7 @@ runtime system leveraging the extended user interrupts:
     Compared to existing primitives, these preemptive primitives will
     enable precise control over runnable threads.
 
-## We want to talk about the workload now
-
-# Related Work
+## Related Work
 
 Optimizing network and I/O workloads at microsecond timescales is a
 critical challenge for modern data centers, where achieving low latency
@@ -130,14 +130,14 @@ streamline communication and enable responsive scheduling. Together,
 these works provide a foundation for designing systems that achieve
 low-latency, high-throughput performance in modern data centers.
 
-# Characterization of User Interrupts
+## Characterization of User Interrupts
 
 xUI builds on the existing UIPI support in Intel processors. Here, we
 provide the first in-depth analysis of this feature. This also provides
 context for our discussion of xUI in
 section 4.
 
-## Overview of User Interrupts
+### Overview of User Interrupts
 
 User interprocessor interrupts (UIPI) was recently introduced by Intel
 in their Sapphire Rapids processors.[^1] UIPI allows user-level code
@@ -205,12 +205,12 @@ receiving thread runs. When a migration occurs, the OS updates this
 field. The sender process, for each UIPI that it sends, consults the
 UPID of the receiver to identify the correct physical destination.
 
-## Details of Sending and Receiving a UIPI.
+### Details of Sending and Receiving a UIPI.
 
 ![**Architecture view of UIPI:** *UIPI is largely implemented in
 microcode. The sender communicates the UIPI vector through shared memory
 (UPID). Steps described in
-§ 3.2*](figures/fig_uipi_end_to_end.pdf)
+§ 3.2*](figures/fig_uipi_end_to_end.png)
 
 Before an interrupt is sent, the application sets up a route for the
 interrupt using system calls. allocates the UPID and
@@ -244,7 +244,7 @@ the stack pointer and PC from the stack, and sets the user interrupt
 flag (UIF), re-enabling interrupt delivery, and resuming normal control
 flow on the receiver.
 
-## UIPI Performance
+### UIPI Performance
 
 This table summarizes the key performance metrics of
 UIPI. The setup for measuring these is described in
@@ -254,7 +254,7 @@ UIPI. The setup for measuring these is described in
 |---------------------|---------------|-----------|--------|--------|
 | 1360 cycles | 720 cycles | 383 cycles | 2 cycles | 32 cycles |
 
-# Extensions to User Interrupts
+## Extensions to User Interrupts
 
 The design of xUI is inspired by our own frustration with the
 limitations of existing user-level notification support in software
@@ -281,7 +281,7 @@ following design goals:
 In the following subsections, we will discuss these extensions and
 provide a brief description of their microarchitectural designs.
 
-## Tracked Interrupts
+### Tracked Interrupts
 
 Tracked interrupts are equivalent to normal interrupts from a
 programmers perspective, they just improve performance. To achieve this,
@@ -318,7 +318,7 @@ program instruction (return address). This method guarantees that the
 interrupt is eventually delivered, even if the current branch is
 misspeculated, without needlessly throwing away useful work.
 
-## The Kernel Bypass (KB) Timer
+### The Kernel Bypass (KB) Timer
 
 The Kernel bypass timer (KB_timer) offers a per-thread timer, similar to
 the local APIC timer. As with the APIC timer, it is not intended for
@@ -353,7 +353,7 @@ will trap. If it is in user mode, it will deliver an interrupt to
 whatever thread is currently executing. Consequently, it is up to the
 kernel to manage the timer state.
 
-## Interrupt Forwarding: Routing Device Interrupts
+### Interrupt Forwarding: Routing Device Interrupts
 
 We want to be able to get the benefits of xUI for devices, however, UIPI
 has it's own delivery scheme using UPIDs that the rest of the interrupt
@@ -389,9 +389,9 @@ simultaneously. One could imagine adding a new field to the message
 format of the interrupt system, or to repurpose unused bits in the
 existing message format (e.g. the clusterID) to avoid this limitation.
 
-# Experimental Setup
+## Experimental Setup
 
-## Hardware Platform
+### Hardware Platform
 
 We run all experiments on an Intel Xeon Gold 5420+ processor with 28
 Sapphire Rapids cores, using Intel's fork of Linux v6.0.0 with their
@@ -403,7 +403,7 @@ the difference between the number of committed micro-ops and decoded
 instructions to estimate the number of flushed micro-ops, as there is no
 direct performance counter for flushed micro-ops.
 
-## gem5 Simulation
+### gem5 Simulation
 
 Our simulation is based on gem5 (version 23), and extends the
 out-of-order CPU model. We configure the baseline architecture to model
@@ -423,9 +423,9 @@ for delivering I/O completions using xUI.
 | Parameter | Value | Parameter | Value |
 |-----------|-------|-----------|-------|
 | Frequency | 2.0 GHz | I cache | 32 KB, 8 way |
-| Fetch Width | 6 $\mu$ops | D cache | 32 KB, 8 way |
-| Issue Width | 10 $\mu$ops | Retire Width | 10 $\mu$ops |
-| Squash Width | 10 $\mu$ops | Decode Width | 6 $\mu$ops |
+| Fetch Width | 6 μops | D cache | 32 KB, 8 way |
+| Issue Width | 10 μops | Retire Width | 10 μops |
+| Squash Width | 10 μops | Decode Width | 6 μops |
 | SQ Size | 72 entries | IQ | 168 entries |
 | LQ Size | 128 entries | Functional Units | Int ALU(6), Mult(2), FPALU/Mult(3) |
 | ROB Size | 384 entries | | |
@@ -438,7 +438,7 @@ pipeline instead of flushing it, and a fixed 13[^2] cycles were
 artificially added after each drain. To remedy this, we plan to upstream
 our improved interrupt model to gem5.
 
-## IO Notification: L3Fwd & Simulated Accelerators
+### IO Notification: L3Fwd & Simulated Accelerators
 
 **DPDK-Based L3 Forwarding.** We used a methodology similar to previous
 work to measure the inefficiencies associated with spin
@@ -453,7 +453,7 @@ use an exponential distribution for inter-arrival times of a fixed
 inter-arrival time to model the burstiness of real network
 traffic.
 
-## System Configuration
+### System Configuration
 
 We model a system with 1, 2, 4, or 8 different NICs, each with its own
 receive queue. The packets are sent back to the same NIC in the 1 NIC
@@ -480,7 +480,7 @@ to cover a wide range of scenarios. For the above points, we model
 response time using a truncated normal distribution with parameters
 $(\text{min}, \mu) = (1\mu{}s, 2\mu{}s)$ and $(10\mu{}s, 20\mu{}s)$.
 
-## Evaluated Approaches
+### Evaluated Approaches
 
 In our evaluation, we compare the following approaches:
 
@@ -496,13 +496,13 @@ In our evaluation, we compare the following approaches:
 
 -   *Tracked Device UIs*: tracked user interrupts sent from a device
 
-# Evaluation
+## Evaluation
 
-## IO notification in l3fwd
+### IO notification in l3fwd
 
 ![**xUI's CPU Utilization with DPDK-l3fwd application:** *Tracked Device
 UIs can free up CPU cycles that polling would waste.*
-](figures/fig-l3-forwarding.pdf)
+](figures/fig-l3-forwarding.png)
 
 In this experiment, we compare the performance of polling with xUI's
 tracked interrupts from devices, using the DPDK l3fwd application. We
@@ -521,7 +521,7 @@ other application-level work when the core is not busy handling packets
 or interrupts. For example, with 1 queue and 40% load, tracking recovers
 45% of the CPU cycles that polling would waste.
 
-## Preemption for RocksDB in Aspen
+### Preemption for RocksDB in Aspen
 
 Preemption can mitigate HOL blocking, reducing tail latency in workloads
 with high dispersion. We evaluated these benefits for RocksDB in Aspen,
@@ -542,7 +542,7 @@ latencies for SCAN requests at high load.
 
 ![**Throughput of RocksDB:** *KB timers and tracked interrupts can
 achieve 10% higher throughput for GET requests than UIPI.*
-](figures/fig-rocksdb.pdf)
+](figures/fig-rocksdb.png)
 
 [^1]: User interrupt support is slated to appear in both server and
     consumer class chips (Sapphire Rapids, Sierra Forest, Grand Ridge,
